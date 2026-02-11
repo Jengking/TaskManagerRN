@@ -1,7 +1,9 @@
 import Task from "@/components/Task";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  Alert,
   FlatList,
   StyleSheet,
   Text,
@@ -10,20 +12,52 @@ import {
   View,
 } from "react-native";
 
+const STORAGE_KEY = "@tasks";
+
 export default function HomeScreen() {
   //Navigation hook
   const router = useRouter();
 
   // Our task data (hardcoded for now)
-  const [tasks, setTasks] = useState([
-    { id: 1, title: "Learn React Native basics", completed: true },
-    { id: 2, title: "Build a task manager", completed: false },
-    { id: 3, title: "Understand state and props", completed: false },
-    { id: 4, title: "Make changes to the code", completed: false },
-    { id: 5, title: "Save & Reload", completed: false },
-  ]);
-
+  const [tasks, setTasks] = useState([]);
   const [taskInput, setTaskInput] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+
+  //load tasks when app starts
+  useEffect(() => {
+    loadTasks();
+  }, []);
+
+  useEffect(() => {
+    if (!isLoading) {
+      saveTasks();
+    }
+  }, [tasks]);
+
+  //load tasks from storage
+  const loadTasks = async () => {
+    try {
+      const storedTasks = await AsyncStorage.getItem(STORAGE_KEY);
+      if (storedTasks) {
+        setTasks(JSON.parse(storedTasks));
+      }
+    } catch (error) {
+      console.error("Failed to load tasks:", error);
+      Alert.alert("Error", "Failed to load tasks");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Save tasks to storage
+  const saveTasks = async () => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+    } catch (error) {
+      console.error("Failed to save tasks:", error);
+      Alert.alert("Error", "Failed to save tasks");
+    }
+  };
 
   const addTask = () => {
     if (taskInput.trim() === "") return;
@@ -32,6 +66,7 @@ export default function HomeScreen() {
       id: Date.now(),
       title: taskInput,
       completed: false,
+      createdAt: new Date().toISOString(), //timestamp
     };
 
     setTasks([...tasks, newTask]);
@@ -48,12 +83,37 @@ export default function HomeScreen() {
 
   //function to delete task
   const deleteTask = (id: number) => {
-    setTasks(tasks.filter((task) => task.id !== id));
+    Alert.alert("Delete Task", "Are you sure you want to delete this task?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => setTasks(tasks.filter((task) => task.id !== id)),
+      },
+    ]);
   };
 
-  //clear all completed tasks at once
   const clearCompleted = () => {
-    setTasks(tasks.filter((task) => !task.completed));
+    Alert.alert("Clear Completed", "Delete all completed tasks?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear",
+        style: "destructive",
+        onPress: () => setTasks(tasks.filter((task) => !task.completed)),
+      },
+    ]);
+  };
+
+  // Clear all tasks (for testing)
+  const clearAllTasks = () => {
+    Alert.alert("Clear All", "Delete ALL tasks? This cannot be undone!", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear All",
+        style: "destructive",
+        onPress: () => setTasks([]),
+      },
+    ]);
   };
 
   //Navigate to task detail screen
@@ -87,6 +147,15 @@ export default function HomeScreen() {
       <Text style={styles.emptyHint}>Add one above to get started</Text>
     </View>
   );
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <View style={[styles.container, styles.centerContent]}>
+        <Text style={styles.loadingText}>Loading tasks...</Text>
+      </View>
+    );
+  }
 
   //calculate stats
   const completedCount = tasks.filter((t) => t.completed).length;
@@ -147,6 +216,14 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "bold",
     marginBottom: 20,
+  },
+  centerContent: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    fontSize: 18,
+    color: "#666",
   },
   hint: {
     fontSize: 12,
